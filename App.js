@@ -4,13 +4,25 @@ import {
   View,
   SafeAreaView,
   Text,
+  TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { Camera, useCameraDevices } from 'react-native-vision-camera';
+import {
+  Camera,
+  useCameraDevices,
+  useFrameProcessor,
+} from 'react-native-vision-camera';
+import { labelImage } from 'vision-camera-image-labeler';
+import Animated, {
+  useAnimatedProps,
+  useSharedValue,
+} from 'react-native-reanimated';
+
+const AnimatedText = Animated.createAnimatedComponent(TextInput);
 
 export default function App() {
   const [cameraPermission, setCameraPermission] = useState();
-  const [detetorValue, setDetectorValue] = useState('');
+  const detectorResult = useSharedValue('');
 
   useEffect(() => {
     (async () => {
@@ -24,10 +36,29 @@ export default function App() {
   const devices = useCameraDevices();
   const cameraDevice = devices.back;
 
+  const frameProcessor = useFrameProcessor(frame => {
+    'worklet';
+    const imageLabels = labelImage(frame);
+
+    console.log('Image labels:', imageLabels);
+    detectorResult.value = imageLabels[0]?.label;
+  }, []);
+
+  const animatedTextProps = useAnimatedProps(
+    () => ({ text: detectorResult.value }),
+    [detectorResult.value],
+  );
+
   const renderDetectorContent = () => {
     if (cameraDevice && cameraPermission === 'authorized') {
       return (
-        <Camera style={styles.camera} device={cameraDevice} isActive={true} />
+        <Camera
+          style={styles.camera}
+          device={cameraDevice}
+          isActive={true}
+          frameProcessor={frameProcessor}
+          frameProcessorFps={3}
+        />
       );
     }
     return <ActivityIndicator size="large" color="#1C6758" />;
@@ -49,7 +80,12 @@ export default function App() {
 
       {renderDetectorContent()}
 
-      <Text style={styles.detectorValueText}>{detetorValue}</Text>
+      <AnimatedText
+        style={styles.detectorValueText}
+        animatedProps={animatedTextProps}
+        editable={false}
+        multiline={true}
+      />
     </View>
   );
 }
